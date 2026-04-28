@@ -17,6 +17,7 @@ interface Config {
   vapidPrivate: string;
   vapidSubject: string;      // mailto:bustinjailey@gmail.com
   listenPort: number;
+  listenHost: string;        // bind address; default 127.0.0.1 for safety
   dataDir: string;           // where subs.json + vapid.json live
 }
 
@@ -39,6 +40,7 @@ const config: Config = (() => {
     vapidPrivate: process.env.VAPID_PRIVATE || '',
     vapidSubject: process.env.VAPID_SUBJECT || 'mailto:bustinjailey@gmail.com',
     listenPort: Number(process.env.LISTEN_PORT || 7891),
+    listenHost: process.env.LISTEN_HOST || '127.0.0.1',
     dataDir,
   };
 })();
@@ -410,8 +412,8 @@ async function main() {
   console.log(`[boot] vapid public key: ${config.vapidPublic}`);
   console.log(`[boot] subscriptions loaded: ${subs.length}`);
 
-  server.listen(config.listenPort, '127.0.0.1', () => {
-    console.log(`[http] listening on 127.0.0.1:${config.listenPort}`);
+  server.listen(config.listenPort, config.listenHost, () => {
+    console.log(`[http] listening on ${config.listenHost}:${config.listenPort}`);
   });
 
   connectWS();

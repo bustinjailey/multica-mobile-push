@@ -34,6 +34,10 @@ MULTICA_PAT=
 TARGET_USER_ID=
 VAPID_SUBJECT=mailto:bustinjailey@gmail.com
 LISTEN_PORT=7891
+# Bind to LAN IP so caddy-primary on LXC 102 can reverse_proxy to us. The
+# relay still requires a valid Multica PAT for any write endpoint, so opening
+# the port LAN-wide is safe within the trust boundary of the home network.
+LISTEN_HOST=0.0.0.0
 DATA_DIR=/var/lib/multica-mobile-push
 EOF
     chmod 600 "$ENV_DIR/env"
