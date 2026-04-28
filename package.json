@@ -1,0 +1,25 @@
+{
+  "name": "multica-mobile-push",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web Push relay for the multica-mobile PWA. Subscribes to a Multica workspace WebSocket and fans out push notifications for inbox events, assignment changes, mentions, and status transitions.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "gen-vapid": "node -e 'const w=require(\"web-push\");const k=w.generateVAPIDKeys();console.log(\"PUBLIC :\",k.publicKey);console.log(\"PRIVATE:\",k.privateKey)'"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,24 @@
+[Unit]
+Description=multica-mobile-push — Web Push relay for the multica-mobile PWA
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=multica
+Group=multica
+WorkingDirectory=/opt/multica-mobile-push
+EnvironmentFile=/etc/multica-mobile-push/env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/multica-mobile-push
+
+[Install]
+WantedBy=multi-user.target
