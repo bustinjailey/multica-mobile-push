@@ -8,14 +8,14 @@ import webpush from 'web-push';
 // ===================== Config =====================
 
 interface Config {
-  multicaUrl: string;        // e.g. https://multica.bustinjailey.org
-  multicaWsUrl: string;      // wss://multica.bustinjailey.org/ws
+  multicaUrl: string;        // e.g. https://multica.example.com
+  multicaWsUrl: string;      // wss://multica.example.com/ws
   multicaPat: string;        // long-lived PAT for the relay's WS subscription
-  workspaceSlug: string;     // e.g. snapview
+  workspaceSlug: string;     // your Multica workspace slug
   targetUserId: string;      // user_id whose events trigger pushes
   vapidPublic: string;
   vapidPrivate: string;
-  vapidSubject: string;      // mailto:bustinjailey@gmail.com
+  vapidSubject: string;      // mailto:<your-contact-email> per RFC 8292
   listenPort: number;
   listenHost: string;        // bind address; default 127.0.0.1 for safety
   dataDir: string;           // where subs.json + vapid.json live
@@ -28,7 +28,7 @@ function requireEnv(k: string): string {
 }
 
 const config: Config = (() => {
-  const multicaUrl = process.env.MULTICA_URL || 'https://multica.bustinjailey.org';
+  const multicaUrl = requireEnv('MULTICA_URL');
   const dataDir = process.env.DATA_DIR || '/var/lib/multica-mobile-push';
   return {
     multicaUrl,
@@ -38,7 +38,7 @@ const config: Config = (() => {
     targetUserId: requireEnv('TARGET_USER_ID'),
     vapidPublic: process.env.VAPID_PUBLIC || '',
     vapidPrivate: process.env.VAPID_PRIVATE || '',
-    vapidSubject: process.env.VAPID_SUBJECT || 'mailto:bustinjailey@gmail.com',
+    vapidSubject: requireEnv('VAPID_SUBJECT'),
     listenPort: Number(process.env.LISTEN_PORT || 7891),
     listenHost: process.env.LISTEN_HOST || '127.0.0.1',
     dataDir,
