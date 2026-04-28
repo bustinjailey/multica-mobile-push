@@ -187,6 +187,108 @@ const issueUrl = (id: string) => `/m/#/issue/${id}`;
 // issue:updated (which carries the post-update issue, not a delta).
 const lastSeen = new Map<string, { assignee_id?: string | null; status?: string }>();
 
+// Inbox event types that match the PWA's "Important" filter exclusions —
+// suppressed from push so the lock screen only fires for things that need
+// attention. Status changes are still surfaced on transitions to 'blocked'
+// via the issue:updated path.
+const INBOX_NOISE_TYPES = new Set(['status_changed', 'reaction_added']);
+
+const STATUS_LABELS: Record<string, string> = {
+  backlog: 'Backlog',
+  todo: 'Todo',
+  in_progress: 'In progress',
+  in_review: 'In review',
+  done: 'Done',
+  cancelled: 'Cancelled',
+  blocked: 'Blocked',
+};
+const prettyStatus = (s?: string): string => (s ? (STATUS_LABELS[s] || s) : '');
+
+const stripMentionMarkup = (text: string): string =>
+  text
+    .replace(/\[([^\]]+)\]\(mention:\/\/[^)]+\)/g, '@$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+// Lead with the event verb, then the issue identifier — that's the bit the
+// user needs at a glance ("what changed?"), not the issue title repeated
+// twice. Returns null to suppress the push entirely (noise types).
+function describeInboxEvent(
+  item: any,
+  enriched: { ident: string; title: string } | null,
+): { title: string; body: string } | null {
+  const ident = enriched?.ident || '';
+  const issueTitle = enriched?.title || '';
+  const headline = ident && issueTitle ? `${ident}: ${issueTitle}` : (ident || issueTitle || '');
+  const d = item.details || {};
+  const author: string =
+    d.actor_name || d.author_name || d.commenter_name || d.user_name || '';
+  const meId = config.targetUserId;
+  const t: string = item.type || '';
+
+  if (INBOX_NOISE_TYPES.has(t)) return null;
+
+  // Mobile app drops these from the inbox unless the new assignee is me; the
+  // 'newly assigned to me' case is handled separately by issue:updated.
+  if (t === 'assignee_changed' && d.new_assignee_id !== meId) return null;
+
+  switch (t) {
+    case 'comment_added':
+    case 'comment':
+    case 'comment_created': {
+      const preview = stripMentionMarkup(item.body || '').trim().slice(0, 140);
+      return {
+        title: `💬 New comment on ${ident || 'an issue'}`,
+        body: preview
+          ? (author ? `${author}: ${preview}` : preview)
+          : (issueTitle || 'tap to view'),
+      };
+    }
+    case 'mention':
+    case 'mention_added':
+    case 'mentioned': {
+      const preview = stripMentionMarkup(item.body || '').trim().slice(0, 140);
+      return {
+        title: `🔔 You were mentioned in ${ident || 'an issue'}`,
+        body: preview
+          ? (author ? `${author}: ${preview}` : preview)
+          : (issueTitle || 'tap to view'),
+      };
+    }
+    case 'issue_assigned':
+    case 'assigned': {
+      const who = author ? `${author} assigned ` : 'Assigned: ';
+      return {
+        title: `👤 ${who}${ident}`.trim(),
+        body: issueTitle || 'tap to view',
+      };
+    }
+    case 'assignee_changed':
+      return {
+        title: `👤 ${ident || 'Issue'} assigned to you`,
+        body: issueTitle || 'tap to view',
+      };
+    case 'priority_changed': {
+      const to = d.new_priority || d.to_priority || d.to || '';
+      return {
+        title: `⚡ ${ident || 'Issue'} priority → ${to || '?'}`,
+        body: issueTitle || 'tap to view',
+      };
+    }
+    case 'description_updated':
+      return {
+        title: `📝 ${ident || 'Issue'} description updated`,
+        body: issueTitle || 'tap to view',
+      };
+    default:
+      // Fallback uses the inbox item's own title/body, which the server tends
+      // to fill with an action-shaped string for known event types.
+      return {
+        title: `📥 ${item.title || headline || 'New notification'}`,
+        body: item.body || issueTitle || 'tap to view',
+      };
+  }
+}
+
 interface MulticaEvent {
   type: string;
   payload: any;
@@ -203,11 +305,11 @@ async function handleEvent(ev: MulticaEvent) {
       if (item.recipient_type !== 'member' || item.recipient_id !== config.targetUserId) return;
       const issueId: string | undefined = item.issue_id;
       const enriched = issueId ? await lookupIssue(issueId) : null;
-      const title = enriched ? `${enriched.ident}: ${enriched.title}` : (item.title || 'New inbox item');
-      const body = item.body || item.title || (enriched ? '' : 'tap to view');
+      const desc = describeInboxEvent(item, enriched);
+      if (!desc) return; // noise types are suppressed from push
       await fanout({
-        title: '📥 ' + title,
-        body,
+        title: desc.title,
+        body: desc.body,
         tag: `inbox-${item.id}`,
         url: issueId ? issueUrl(issueId) : '/m/',
       });
