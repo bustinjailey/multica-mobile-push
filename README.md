@@ -21,7 +21,6 @@ Inbox notifications cover most "something needs my attention" cases — Multica 
 ```
 ┌─────────────────┐  ws  ┌──────────────────────┐  push  ┌─────────────┐
 │ Multica server  │─────>│ multica-mobile-push  │───────>│ Phone (PWA) │
-│ (LXC 122)       │      │  (LXC 122 alongside) │        │             │
 └─────────────────┘      │ - holds WS 24/7      │        └─────────────┘
                          │ - stores subs in JSON│              ▲
                          │ - sends Web Push     │              │
@@ -29,8 +28,8 @@ Inbox notifications cover most "something needs my attention" cases — Multica 
                          └──────────────────────┘<─────────────┘
                                   ▲
                                   │
-                               Caddy (LXC 102)
-                            multica.bustinjailey.org/m/push/*
+                          Reverse proxy (e.g. Caddy)
+                            <your-host>/m/push/*
 ```
 
 ## HTTP API
@@ -45,18 +44,19 @@ All write endpoints require `Authorization: Bearer <multica-pat>` and the PAT mu
 | `POST`   | `/test`             | Sends a test notification to all subscriptions. |
 | `GET`    | `/health`           | Returns `{ok: true, subs: N}`. |
 
-Behind Caddy, all routes are at `https://multica.bustinjailey.org/m/push/*`.
+Behind a reverse proxy you'd typically expose these at `https://<your-host>/m/push/*`.
 
-## Install (LXC 122)
+## Install
 
 ```sh
-# As root on LXC 122:
+# As root on the host that should run the relay:
 git clone https://github.com/bustinjailey/multica-mobile-push /opt/multica-mobile-push
 cd /opt/multica-mobile-push
 bash deploy/install.sh
 
-# Edit /etc/multica-mobile-push/env to set MULTICA_PAT and TARGET_USER_ID
-# (mint a dedicated PAT for this service so it can be rotated independently).
+# Edit /etc/multica-mobile-push/env to set MULTICA_URL, WORKSPACE_SLUG,
+# MULTICA_PAT and TARGET_USER_ID (mint a dedicated PAT for this service so
+# it can be rotated independently).
 systemctl start multica-mobile-push
 journalctl -u multica-mobile-push -f
 ```
@@ -71,17 +71,19 @@ git pull
 bash deploy/install.sh
 ```
 
-## Caddy
+## Reverse proxy
 
-The relay listens on `127.0.0.1:7891` only (no public binding). Add the corresponding reverse_proxy block to the existing `multica.bustinjailey.org { … }` block in `bustinlab-infra/caddy/Caddyfile`:
+The relay binds to `LISTEN_HOST:LISTEN_PORT` (default `127.0.0.1:7891`). To expose it under the same hostname as your Multica web UI (recommended, so the PWA can hit it same-origin), add a `reverse_proxy` block to your existing Multica vhost. Caddy example:
 
 ```caddy
 handle_path /m/push/* {
-    reverse_proxy 192.168.1.179:7891
+    reverse_proxy <relay-host>:7891
 }
 ```
 
-Must come before the static `handle_path /m/* { ... }` block so it matches first.
+Must come before any static `handle_path /m/* { ... }` block so it matches first.
+
+If the relay runs on a different host than the reverse proxy, set `LISTEN_HOST=0.0.0.0` (or to a specific interface) so the proxy can reach it. The relay still requires a valid Multica PAT for any write endpoint, so opening the port within a trusted network is reasonable — but don't expose the port directly to the public internet.
 
 ## VAPID key rotation
 
